@@ -57,6 +57,7 @@ on unix operating systems.
 | `rulers` | List of column positions at which to display the rulers. Can be overridden by language specific `rulers` in `languages.toml` file. | `[]` |
 | `bufferline` | Renders a line at the top of the editor displaying open buffers. Can be `always`, `never` or `multiple` (only shown if more than one buffer is in use) | `never` |
 | `color-modes` | Whether to color the mode indicator with different colors depending on the mode itself | `false` |
+| `eol` | Whether to enforce files to end with an end-of-line character (ie newline) upon writing, if not present. | `false` |
 
 ### `[editor.statusline]` Section
 

@@ -38,12 +38,12 @@ use anyhow::{anyhow, bail, Error};
 
 pub use helix_core::diagnostic::Severity;
 pub use helix_core::register::Registers;
-use helix_core::Position;
 use helix_core::{
     auto_pairs::AutoPairs,
     syntax::{self, AutoPairConfig},
-    Change,
+    Change, Selection, Tendril,
 };
+use helix_core::{Position, Transaction};
 use helix_dap as dap;
 use helix_lsp::lsp;
 
@@ -178,6 +178,8 @@ pub struct Config {
     pub indent_guides: IndentGuidesConfig,
     /// Whether to color modes with different colors. Defaults to `false`.
     pub color_modes: bool,
+    /// Whether to always end files with a newline. Defaults to `false`.
+    pub eol: bool,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -630,6 +632,7 @@ impl Default for Config {
             bufferline: BufferLine::default(),
             indent_guides: IndentGuidesConfig::default(),
             color_modes: false,
+            eol: false,
         }
     }
 }
@@ -1239,7 +1242,19 @@ impl Editor {
         // via stream.then() ? then push into main future
 
         let path = path.map(|path| path.into());
+        let eol_enabled = self.config().eol;
         let doc = doc_mut!(self, &doc_id);
+        if eol_enabled {
+            let current_text = doc.text();
+            let add_extra_eol = Transaction::insert(
+                current_text,
+                &Selection::point(current_text.len_chars()),
+                Tendril::from(doc.line_ending.as_str()),
+            );
+            let view = view_mut!(self);
+            doc.apply(&add_extra_eol, view.id);
+            doc.append_changes_to_history(view);
+        }
         let future = doc.save(path, force)?;
 
         use futures_util::stream;
@@ -1463,9 +1478,7 @@ impl Editor {
 }
 
 fn try_restore_indent(doc: &mut Document, view: &mut View) {
-    use helix_core::{
-        chars::char_is_whitespace, line_ending::line_end_char_index, Operation, Transaction,
-    };
+    use helix_core::{chars::char_is_whitespace, line_ending::line_end_char_index, Operation};
 
     fn inserted_a_new_blank_line(changes: &[Operation], pos: usize, line_end_pos: usize) -> bool {
         if let [Operation::Retain(move_pos), Operation::Insert(ref inserted_str), Operation::Retain(_)] =
