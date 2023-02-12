@@ -24,6 +24,7 @@ use helix_view::{
     document::{Mode, SavePoint, SCRATCH_BUFFER_NAME},
     editor::{CompleteAction, CursorShapeConfig},
     graphics::{Color, CursorKind, Modifier, Rect, Style},
+    handlers::dap::dap_pos_to_pos,
     input::{KeyEvent, MouseButton, MouseEvent, MouseEventKind},
     keyboard::{KeyCode, KeyModifiers},
     Document, Editor, Theme, View,
@@ -102,10 +103,9 @@ impl EditorView {
 
         // Set DAP highlights, if needed.
         if let Some(frame) = editor.current_stack_frame() {
-            let dap_line = frame.line.saturating_sub(1) as usize;
             let style = theme.get("ui.highlight.frameline");
             let line_decoration = move |renderer: &mut TextRenderer, pos: LinePos| {
-                if pos.doc_line != dap_line {
+                if pos.doc_line != usize::try_from(frame.line).unwrap_or_default() {
                     return;
                 }
                 renderer.surface.set_style(
@@ -137,6 +137,31 @@ impl EditorView {
             }
             highlights = Box::new(syntax::merge(highlights, diagnostic));
         }
+
+        // Set DAP highlights, with possibility to overwrite syntax highlights, if fg set.
+        let highlights: Box<dyn Iterator<Item = HighlightEvent>> =
+            if let Some(frame) = editor.current_stack_frame() {
+                let dap_line_start = frame.line;
+                let dap_line_end = frame.end_line.unwrap_or(dap_line_start);
+                let dap_col_start = frame.column;
+                let dap_col_end = frame.end_column.unwrap_or_default();
+
+                let dap_start = dap_pos_to_pos(doc.text(), dap_line_start, dap_col_start)
+                    .unwrap_or_else(|| usize::try_from(dap_line_start).unwrap_or(0));
+                let dap_end = dap_pos_to_pos(doc.text(), dap_line_end, dap_col_end)
+                    .unwrap_or_else(|| usize::try_from(dap_line_end).unwrap_or(0));
+
+                if let Some(dap_current_index) = theme.find_scope_index("ui.highlight.frameline") {
+                    Box::new(syntax::merge(
+                        highlights,
+                        vec![(dap_current_index, dap_start..dap_end)],
+                    ))
+                } else {
+                    highlights
+                }
+            } else {
+                highlights
+            };
 
         let highlights: Box<dyn Iterator<Item = HighlightEvent>> = if is_focused {
             let highlights = syntax::merge(
@@ -418,7 +443,6 @@ impl EditorView {
             Mode::Normal => theme.find_scope_index_exact("ui.cursor.normal"),
         }
         .unwrap_or(base_cursor_scope);
-
         let primary_cursor_scope = match mode {
             Mode::Insert => theme.find_scope_index_exact("ui.cursor.primary.insert"),
             Mode::Select => theme.find_scope_index_exact("ui.cursor.primary.select"),
@@ -1055,7 +1079,7 @@ impl EditorView {
                         view.pos_at_visual_coords(doc, coords.row as u16, coords.col as u16, true)
                     {
                         let line = doc.text().char_to_line(char_idx);
-                        commands::dap_toggle_breakpoint_impl(cxt, path, line);
+                        commands::dap_toggle_breakpoint_impl(cxt, path, line.into(), None);
                         return EventResult::Consumed(None);
                     }
                 }

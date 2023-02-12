@@ -10,7 +10,7 @@ use crate::{
     view::ViewPosition,
     Align, Document, DocumentId, View, ViewId,
 };
-use dap::StackFrame;
+use dap::{Column, Line, StackFrame};
 use helix_vcs::DiffProviderRegistry;
 
 use futures_util::stream::select_all::SelectAll;
@@ -770,8 +770,8 @@ pub struct Breakpoint {
     pub verified: bool,
     pub message: Option<String>,
 
-    pub line: usize,
-    pub column: Option<usize>,
+    pub line: Line,
+    pub column: Option<Column>,
     pub condition: Option<String>,
     pub hit_condition: Option<String>,
     pub log_message: Option<String>,

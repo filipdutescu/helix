@@ -1,9 +1,11 @@
 use crate::editor::{Action, Breakpoint};
 use crate::{align_view, Align, Editor};
 use dap::requests::DisconnectArguments;
+use dap::{Column, Line};
 use helix_core::Selection;
 use helix_dap::{self as dap, Client, ConnectionType, Payload, Request, ThreadId};
-use helix_lsp::block_on;
+use helix_lsp::util::{lsp_pos_to_pos, pos_to_lsp_pos};
+use helix_lsp::{block_on, lsp, OffsetEncoding};
 use log::warn;
 use std::fmt::Write;
 use std::path::PathBuf;
@@ -19,12 +21,27 @@ macro_rules! debugger {
 }
 
 // general utils:
-pub fn dap_pos_to_pos(doc: &helix_core::Rope, line: usize, column: usize) -> Option<usize> {
-    // 1-indexing to 0 indexing
-    let line = doc.try_line_to_char(line - 1).ok()?;
-    let pos = line + column.saturating_sub(1);
-    // TODO: this is probably utf-16 offsets
-    Some(pos)
+pub fn dap_pos_to_pos(doc: &helix_core::Rope, line: Line, column: Column) -> Option<usize> {
+    let line = match line.try_into() {
+        Ok(line) => line,
+        Err(_) => {
+            return None;
+        }
+    };
+
+    lsp_pos_to_pos(
+        doc,
+        lsp::Position::new(line, column.into()),
+        OffsetEncoding::Utf16,
+    )
+}
+
+pub fn pos_to_dap_pos(doc: &helix_core::Rope, pos: usize) -> dap::Position {
+    let lsp_pos = pos_to_lsp_pos(doc, pos, OffsetEncoding::Utf16);
+    dap::Position {
+        line: lsp_pos.line.into(),
+        column: (lsp_pos.character as usize).into(),
+    }
 }
 
 pub async fn select_thread_id(editor: &mut Editor, thread_id: ThreadId, force: bool) {
@@ -74,7 +91,9 @@ pub fn jump_to_stack_frame(editor: &mut Editor, frame: &helix_dap::StackFrame) {
     let start = dap_pos_to_pos(doc.text(), frame.line, frame.column).unwrap_or(0);
     let end = frame
         .end_line
-        .and_then(|end_line| dap_pos_to_pos(doc.text(), end_line, frame.end_column.unwrap_or(0)))
+        .and_then(|end_line| {
+            dap_pos_to_pos(doc.text(), end_line, frame.end_column.unwrap_or_default())
+        })
         .unwrap_or(start);
 
     let selection = Selection::single(start.min(text_end), end.min(text_end));
@@ -113,7 +132,8 @@ pub fn breakpoints_changed(
     let source_breakpoints = breakpoints
         .iter()
         .map(|breakpoint| helix_dap::SourceBreakpoint {
-            line: breakpoint.line + 1, // convert from 0-indexing to 1-indexing (TODO: could set debugger to 0-indexing on init)
+            line: breakpoint.line,
+            column: breakpoint.column,
             ..Default::default()
         })
         .collect::<Vec<_>>();
@@ -127,8 +147,7 @@ pub fn breakpoints_changed(
                 breakpoint.message = dap_breakpoint.message;
                 // TODO: handle breakpoint.message
                 // TODO: verify source matches
-                breakpoint.line = dap_breakpoint.line.unwrap_or(0).saturating_sub(1); // convert to 0-indexing
-                                                                                      // TODO: no unwrap
+                breakpoint.line = dap_breakpoint.line.unwrap();
                 breakpoint.column = dap_breakpoint.column;
                 // TODO: verify end_linef/col instruction reference, offset
             }
@@ -214,7 +233,7 @@ impl Editor {
                                         id: breakpoint.id,
                                         verified: breakpoint.verified,
                                         message: breakpoint.message,
-                                        line: breakpoint.line.unwrap().saturating_sub(1), // TODO: no unwrap
+                                        line: breakpoint.line.unwrap(), // TODO: no unwrap
                                         column: breakpoint.column,
                                         ..Default::default()
                                     });
@@ -227,8 +246,7 @@ impl Editor {
                                 {
                                     breakpoints[i].verified = breakpoint.verified;
                                     breakpoints[i].message = breakpoint.message.clone();
-                                    breakpoints[i].line =
-                                        breakpoint.line.unwrap().saturating_sub(1); // TODO: no unwrap
+                                    breakpoints[i].line = breakpoint.line.unwrap_or_default(); // TODO: no unwrap
                                     breakpoints[i].column = breakpoint.column;
                                 }
                             }

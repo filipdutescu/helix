@@ -4,11 +4,11 @@ use crate::{
     job::{Callback, Jobs},
     ui::{self, overlay::overlayed, FilePicker, Picker, Popup, Prompt, PromptEvent, Text},
 };
-use dap::{StackFrame, Thread, ThreadStates};
+use dap::{Column, Line, StackFrame, Thread, ThreadStates};
 use helix_core::syntax::{DebugArgumentValue, DebugConfigCompletion, DebugTemplate};
 use helix_dap::{self as dap, Client};
 use helix_lsp::block_on;
-use helix_view::editor::Breakpoint;
+use helix_view::{editor::Breakpoint, handlers::dap::pos_to_dap_pos};
 
 use serde_json::{to_value, Value};
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -82,8 +82,8 @@ fn thread_picker(
                     let frame = frames.get(0)?;
                     let path = frame.source.as_ref()?.path.clone()?;
                     let pos = Some((
-                        frame.line.saturating_sub(1),
-                        frame.end_line.unwrap_or(frame.line).saturating_sub(1),
+                        frame.line.try_into().unwrap_or(0),
+                        frame.end_line.unwrap_or(frame.line).try_into().unwrap_or(0),
                     ));
                     Some((path.into(), pos))
                 },
@@ -100,7 +100,9 @@ fn get_breakpoint_at_current_line(editor: &mut Editor) -> Option<(usize, Breakpo
     let line = doc.selection(view.id).primary().cursor_line(text);
     let path = doc.path()?;
     editor.breakpoints.get(path).and_then(|breakpoints| {
-        let i = breakpoints.iter().position(|b| b.line == line);
+        let i = breakpoints
+            .iter()
+            .position(|b| b.line.try_into().unwrap_or(0) == line);
         i.map(|i| (i, breakpoints[i].clone()))
     })
 }
@@ -396,12 +398,16 @@ pub fn dap_toggle_breakpoint(cx: &mut Context) {
             return;
         }
     };
-    let text = doc.text().slice(..);
-    let line = doc.selection(view.id).primary().cursor_line(text);
-    dap_toggle_breakpoint_impl(cx, path, line);
+    let dap_pos = pos_to_dap_pos(doc.text(), doc.selection(view.id).primary().head);
+    dap_toggle_breakpoint_impl(cx, path, dap_pos.line, Some(dap_pos.column));
 }
 
-pub fn dap_toggle_breakpoint_impl(cx: &mut Context, path: PathBuf, line: usize) {
+pub fn dap_toggle_breakpoint_impl(
+    cx: &mut Context,
+    path: PathBuf,
+    line: Line,
+    column: Option<Column>,
+) {
     // TODO: need to map breakpoints over edits and update them?
     // we shouldn't really allow editing while debug is running though
 
@@ -409,12 +415,13 @@ pub fn dap_toggle_breakpoint_impl(cx: &mut Context, path: PathBuf, line: usize) 
     // TODO: always keep breakpoints sorted and use binary search to determine insertion point
     if let Some(pos) = breakpoints
         .iter()
-        .position(|breakpoint| breakpoint.line == line)
+        .position(|breakpoint| breakpoint.line == line && breakpoint.column == column)
     {
         breakpoints.remove(pos);
     } else {
         breakpoints.push(Breakpoint {
             line,
+            column,
             ..Default::default()
         });
     }
@@ -755,8 +762,12 @@ pub fn dap_switch_stack_frame(cx: &mut Context) {
                     (
                         path.into(),
                         Some((
-                            frame.line.saturating_sub(1),
-                            frame.end_line.unwrap_or(frame.line).saturating_sub(1),
+                            frame.line.try_into().unwrap_or_default(),
+                            frame
+                                .end_line
+                                .unwrap_or(frame.line)
+                                .try_into()
+                                .unwrap_or_default(),
                         )),
                     )
                 })

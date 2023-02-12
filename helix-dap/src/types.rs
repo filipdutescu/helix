@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::path::PathBuf;
 
 #[derive(
@@ -20,6 +21,71 @@ pub trait Request {
     type Arguments: serde::de::DeserializeOwned + serde::Serialize;
     type Result: serde::de::DeserializeOwned + serde::Serialize;
     const COMMAND: &'static str;
+}
+
+#[derive(Copy, Debug, Default, PartialEq, Eq, Clone, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct Line(u32);
+
+impl From<u32> for Line {
+    fn from(value: u32) -> Self {
+        Self(value.saturating_add(1))
+    }
+}
+
+impl From<usize> for Line {
+    fn from(value: usize) -> Self {
+        Self(value.saturating_add(1) as u32)
+    }
+}
+
+impl TryFrom<Line> for usize {
+    type Error = ();
+
+    fn try_from(value: Line) -> Result<Self, Self::Error> {
+        (value.0 as usize).checked_sub(1).ok_or(())
+    }
+}
+
+impl TryFrom<Line> for u32 {
+    type Error = ();
+
+    fn try_from(value: Line) -> Result<Self, Self::Error> {
+        value.0.checked_sub(1).ok_or(())
+    }
+}
+
+#[derive(Copy, Debug, Default, PartialEq, Eq, Clone, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct Column(u32);
+
+impl Column {
+    pub fn saturating_sub(self, rhs: u32) -> Self {
+        Self(self.0.saturating_sub(rhs))
+    }
+}
+
+impl From<usize> for Column {
+    fn from(column: usize) -> Self {
+        Column(column as u32)
+    }
+}
+
+impl From<Column> for usize {
+    fn from(column: Column) -> Self {
+        column.0 as usize
+    }
+}
+
+impl From<Column> for u32 {
+    fn from(column: Column) -> Self {
+        column.0
+    }
+}
+
+pub struct Position {
+    pub line: Line,
+    pub column: Column,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
@@ -162,9 +228,9 @@ pub struct Source {
 #[derive(Debug, Default, PartialEq, Eq, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceBreakpoint {
-    pub line: usize,
+    pub line: Line,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub column: Option<usize>,
+    pub column: Option<Column>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub condition: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -184,13 +250,13 @@ pub struct Breakpoint {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<Source>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub line: Option<usize>,
+    pub line: Option<Line>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub column: Option<usize>,
+    pub column: Option<Column>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub end_line: Option<usize>,
+    pub end_line: Option<Line>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub end_column: Option<usize>,
+    pub end_column: Option<Column>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub instruction_reference: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -223,12 +289,12 @@ pub struct StackFrame {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<Source>,
-    pub line: usize,
-    pub column: usize,
+    pub line: Line,
+    pub column: Column,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub end_line: Option<usize>,
+    pub end_line: Option<Line>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub end_column: Option<usize>,
+    pub end_column: Option<Column>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub can_restart: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -261,13 +327,13 @@ pub struct Scope {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<Source>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub line: Option<usize>,
+    pub line: Option<Line>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub column: Option<usize>,
+    pub column: Option<Column>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub end_line: Option<usize>,
+    pub end_line: Option<Line>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub end_column: Option<usize>,
+    pub end_column: Option<Column>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
@@ -820,9 +886,9 @@ pub mod events {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub group: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
-        pub line: Option<usize>,
+        pub line: Option<Line>,
         #[serde(skip_serializing_if = "Option::is_none")]
-        pub column: Option<usize>,
+        pub column: Option<Column>,
         #[serde(skip_serializing_if = "Option::is_none")]
         pub variables_reference: Option<usize>,
         #[serde(skip_serializing_if = "Option::is_none")]

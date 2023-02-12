@@ -263,7 +263,7 @@ pub fn breakpoints<'doc>(
             }
             let breakpoint = breakpoints
                 .iter()
-                .find(|breakpoint| breakpoint.line == line)?;
+                .find(|breakpoint| breakpoint.line.try_into().unwrap_or(0) == line)?;
 
             let style = if breakpoint.condition.is_some() && breakpoint.log_message.is_some() {
                 error.underline_style(UnderlineStyle::Line)
@@ -297,7 +297,7 @@ fn execution_pause_indicator<'doc>(
             }
 
             let current_stack_frame = editor.current_stack_frame()?;
-            if line != current_stack_frame.line - 1
+            if line != current_stack_frame.line.try_into().unwrap_or(0)
                 || doc.path().is_none()
                 || current_stack_frame
                     .source

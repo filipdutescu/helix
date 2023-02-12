@@ -99,7 +99,7 @@ fn setup_integration_logging() {
             ))
         })
         .level(level)
-        .chain(std::io::stdout())
+        .chain(stdout())
         .apply();
 }
 
