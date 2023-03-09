@@ -265,8 +265,8 @@ cd helix
 <pre><code class="language-sh">cargo install --path helix-term --locked
 </code></pre>
 <p>This command will create the <code>hx</code> executable and construct the tree-sitter
-grammars either in the <code>runtime</code> folder, or in the folder specified in <code>HELIX_RUNTIME</code>
-(as described below). To build the tree-sitter grammars requires a c++ compiler to be installed, for example <code>gcc-c++</code>.</p>
+grammars in the local <code>runtime</code> folder. To build the tree-sitter grammars requires
+a c++ compiler to be installed, for example <code>gcc-c++</code>.</p>
 <blockquote>
 <p>💡 If you are using the musl-libc instead of glibc the following environment variable must be set during the build
 to ensure tree-sitter grammars can be loaded correctly:</p>
@@ -276,21 +276,19 @@ to ensure tree-sitter grammars can be loaded correctly:</p>
 <blockquote>
 <p>💡 Tree-sitter grammars can be fetched and compiled if not pre-packaged. Fetch
 grammars with <code>hx --grammar fetch</code> (requires <code>git</code>) and compile them with
-<code>hx --grammar build</code> (requires a C++ compiler).</p>
+<code>hx --grammar build</code> (requires a C++ compiler). This will install them in
+the <code>runtime</code> directory within the user's helix config directory (more
+<a href="install.html#multiple-runtime-directories">details below</a>).</p>
 </blockquote>
 <h3 id="configuring-helixs-runtime-files"><a class="header" href="#configuring-helixs-runtime-files">Configuring Helix's runtime files</a></h3>
-<ul>
-<li><strong>Linux and macOS</strong></li>
-</ul>
+<h4 id="linux-and-macos"><a class="header" href="#linux-and-macos">Linux and macOS</a></h4>
 <p>Either set the <code>HELIX_RUNTIME</code> environment variable to point to the runtime files and add it to your <code>~/.bashrc</code> or equivalent:</p>
 <pre><code class="language-sh">HELIX_RUNTIME=/home/user-name/src/helix/runtime
 </code></pre>
 <p>Or, create a symlink in <code>~/.config/helix</code> that links to the source code directory:</p>
 <pre><code class="language-sh">ln -s $PWD/runtime ~/.config/helix/runtime
 </code></pre>
-<ul>
-<li><strong>Windows</strong></li>
-</ul>
+<h4 id="windows-1"><a class="header" href="#windows-1">Windows</a></h4>
 <p>Either set the <code>HELIX_RUNTIME</code> environment variable to point to the runtime files using the Windows setting (search for
 <code>Edit environment variables for your account</code>) or use the <code>setx</code> command in
 Cmd:</p>
@@ -301,14 +299,27 @@ Cmd:</p>
 <code>C:\Users\Your-Name\</code> for example.</p>
 </blockquote>
 <p>Or, create a symlink in <code>%appdata%\helix\</code> that links to the source code directory:</p>
-<p>| Method     | Command                                                                                |
-| ---------- | -------------------------------------------------------------------------------------- |
-| PowerShell | <code>New-Item -ItemType Junction -Target &quot;runtime&quot; -Path &quot;$Env:AppData\helix\runtime&quot;</code>     |
-| Cmd        | <code>cd %appdata%\helix</code> <br/> <code>mklink /D runtime &quot;%userprofile%\src\helix\runtime&quot;</code>       |</p>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Command</th></tr></thead><tbody>
+<tr><td>PowerShell</td><td><code>New-Item -ItemType Junction -Target &quot;runtime&quot; -Path &quot;$Env:AppData\helix\runtime&quot;</code></td></tr>
+<tr><td>Cmd</td><td><code>cd %appdata%\helix</code> <br/> <code>mklink /D runtime &quot;%userprofile%\src\helix\runtime&quot;</code></td></tr>
+</tbody></table>
+</div>
 <blockquote>
 <p>💡 On Windows, creating a symbolic link may require running PowerShell or
 Cmd as an administrator.</p>
 </blockquote>
+<h4 id="multiple-runtime-directories"><a class="header" href="#multiple-runtime-directories">Multiple runtime directories</a></h4>
+<p>When Helix finds multiple runtime directories it will search through them for files in the
+following order:</p>
+<ol>
+<li><code>runtime/</code> sibling directory to <code>$CARGO_MANIFEST_DIR</code> directory (this is intended for
+developing and testing helix only).</li>
+<li><code>runtime/</code> subdirectory of OS-dependent helix user config directory.</li>
+<li><code>$HELIX_RUNTIME</code>.</li>
+<li><code>runtime/</code> subdirectory of path to Helix executable.</li>
+</ol>
+<p>This order also sets the priority for selecting which file will be used if multiple runtime
+directories have files with the same name.</p>
 <h3 id="validating-the-installation"><a class="header" href="#validating-the-installation">Validating the installation</a></h3>
 <p>To make sure everything is set up as expected you should run the Helix health
 check:</p>
@@ -957,6 +968,7 @@ you to selectively add search terms to your selections.</p>
 <tr><td><code>:update</code></td><td>Write changes only if the file has been modified.</td></tr>
 <tr><td><code>:lsp-workspace-command</code></td><td>Open workspace command picker</td></tr>
 <tr><td><code>:lsp-restart</code></td><td>Restarts the Language Server that is in use by the current doc</td></tr>
+<tr><td><code>:lsp-stop</code></td><td>Stops the Language Server that is in use by the current doc</td></tr>
 <tr><td><code>:tree-sitter-scopes</code></td><td>Display tree sitter scopes, primarily for theming and development.</td></tr>
 <tr><td><code>:debug-start</code>, <code>:dbg</code></td><td>Start a debug session from a given template with given parameters.</td></tr>
 <tr><td><code>:debug-remote</code>, <code>:dbg-tcp</code></td><td>Connect to a debug adapter by TCP address and start a debugging session from a given template with given parameters.</td></tr>
@@ -983,6 +995,7 @@ you to selectively add search terms to your selections.</p>
 <tr><td><code>:pipe</code></td><td>Pipe each selection to the shell command.</td></tr>
 <tr><td><code>:pipe-to</code></td><td>Pipe each selection to the shell command, ignoring output.</td></tr>
 <tr><td><code>:run-shell-command</code>, <code>:sh</code></td><td>Run a shell command</td></tr>
+<tr><td><code>:reset-diff-change</code>, <code>:diffget</code>, <code>:diffg</code></td><td>Reset the diff change at the cursor position.</td></tr>
 </tbody></table>
 </div><div style="break-before: page; page-break-before: always;"></div><h1 id="language-support"><a class="header" href="#language-support">Language Support</a></h1>
 <p>The following languages and Language Servers are supported. To use
@@ -1208,6 +1221,7 @@ signal to the Helix process on Unix operating systems, such as by using the comm
 <tr><td><code>rulers</code></td><td>List of column positions at which to display the rulers. Can be overridden by language specific <code>rulers</code> in <code>languages.toml</code> file</td><td><code>[]</code></td></tr>
 <tr><td><code>bufferline</code></td><td>Renders a line at the top of the editor displaying open buffers. Can be <code>always</code>, <code>never</code> or <code>multiple</code> (only shown if more than one buffer is in use)</td><td><code>never</code></td></tr>
 <tr><td><code>color-modes</code></td><td>Whether to color the mode indicator with different colors depending on the mode itself</td><td><code>false</code></td></tr>
+<tr><td><code>text-width</code></td><td>Maximum line length. Used for the <code>:reflow</code> command and soft-wrapping if <code>soft-wrap.wrap_at_text_width</code> is set</td><td><code>80</code></td></tr>
 </tbody></table>
 </div>
 <h3 id="editorstatusline-section"><a class="header" href="#editorstatusline-section"><code>[editor.statusline]</code> Section</a></h3>
@@ -1408,10 +1422,11 @@ min-width = 1
 <h3 id="editorsoft-wrap-section"><a class="header" href="#editorsoft-wrap-section"><code>[editor.soft-wrap]</code> Section</a></h3>
 <p>Options for soft wrapping lines that exceed the view width:</p>
 <div class="table-wrapper"><table><thead><tr><th>Key</th><th>Description</th><th>Default</th></tr></thead><tbody>
-<tr><td><code>enable</code></td><td>Whether soft wrapping is enabled</td><td><code>false</code></td></tr>
-<tr><td><code>max-wrap</code></td><td>Maximum free space left at the end of the line</td><td><code>20</code></td></tr>
-<tr><td><code>max-indent-retain</code></td><td>Maximum indentation to carry over when soft wrapping a line</td><td><code>40</code></td></tr>
+<tr><td><code>enable</code></td><td>Whether soft wrapping is enabled.</td><td><code>false</code></td></tr>
+<tr><td><code>max-wrap</code></td><td>Maximum free space left at the end of the line.</td><td><code>20</code></td></tr>
+<tr><td><code>max-indent-retain</code></td><td>Maximum indentation to carry over when soft wrapping a line.</td><td><code>40</code></td></tr>
 <tr><td><code>wrap-indicator</code></td><td>Text inserted before soft wrapped lines, highlighted with <code>ui.virtual.wrap</code></td><td><code>↪ </code></td></tr>
+<tr><td><code>wrap-at-text-width</code></td><td>Soft wrap at <code>text-width</code> instead of using the full viewport size.</td><td><code>false</code></td></tr>
 </tbody></table>
 </div>
 <p>Example:</p>
@@ -1917,7 +1932,7 @@ formatter = { command = &quot;mylang-formatter&quot; , args = [&quot;--stdin&quo
 <tr><td><code>config</code></td><td>Language Server configuration</td></tr>
 <tr><td><code>grammar</code></td><td>The tree-sitter grammar to use (defaults to the value of <code>name</code>)</td></tr>
 <tr><td><code>formatter</code></td><td>The formatter for the language, it will take precedence over the lsp when defined. The formatter must be able to take the original file as input from stdin and write the formatted file to stdout</td></tr>
-<tr><td><code>max-line-length</code></td><td>Maximum line length. Used for the <code>:reflow</code> command and soft-wrapping</td></tr>
+<tr><td><code>text-width</code></td><td>Maximum line length. Used for the <code>:reflow</code> command and soft-wrapping if <code>soft-wrap.wrap_at_text_width</code> is set, defaults to <code>editor.text-width</code></td></tr>
 </tbody></table>
 </div>
 <h3 id="file-type-detection-and-the-file-types-key"><a class="header" href="#file-type-detection-and-the-file-types-key">File-type detection and the <code>file-types</code> key</a></h3>
